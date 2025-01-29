@@ -1,21 +1,13 @@
 using SourceGenerator.Sugar.Common;
 using SourceGenerator.Sugar.Extensions;
-using SourceGenerator.Sugar.Interfaces;
 
 namespace SourceGenerator.Sugar.SemanticBuilding;
 
-public struct SpaceStruct : ISemanticStructBuilder
+public struct SpaceStruct
 {
-    public Guid ContextId { get; set; }
-   
-    public void Build(SemanticBuildingContext builder, ref int indentLevel)
+    public static void Build(SemanticBuildingContext builder)
     {
         builder.Indent(0)
             .Push();
-    }
-
-    public override int GetHashCode()
-    {
-        return ContextId.GetHashCode();
     }
 }

@@ -1,19 +1,15 @@
+using SourceGenerator.Sugar.Base;
 using SourceGenerator.Sugar.Common;
 using SourceGenerator.Sugar.Extensions;
-using SourceGenerator.Sugar.Interfaces;
 
 namespace SourceGenerator.Sugar.SemanticBuilding;
 
-public struct NamespaceBuilder : ISemanticStructBuilder
+public class NamespaceBuilder : SemanticStructBuilderBase
 {
     public string Namespace;
     public int UsingsCount;
     
-    public List<LogicContainer> Classes;
-
-    public Guid ContextId { get; set; }
-
-    public void Build(SemanticBuildingContext builder, ref int indentLevel)
+    protected override void BuildStruct(SemanticBuildingContext builder, ref int indentLevel)
     {
         builder
             .Indent(indentLevel)
@@ -25,17 +21,11 @@ public struct NamespaceBuilder : ISemanticStructBuilder
         builder.Indent(indentLevel)
             .Append('{')
             .Push();
-        
-        foreach (var classBuilder in Classes)
-            classBuilder.Build(builder, ref indentLevel);
+
+        BuildChild(builder, ref indentLevel);
         
         builder.Indent(indentLevel)
             .Append('}')
             .Push();
-    }
-    
-    public override int GetHashCode()
-    {
-        return ContextId.GetHashCode();
     }
 }

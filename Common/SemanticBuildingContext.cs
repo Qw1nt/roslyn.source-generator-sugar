@@ -1,29 +1,17 @@
 using System.Text;
-using SourceGenerator.Sugar.Extensions;
-using SourceGenerator.Sugar.Interfaces;
 
 namespace SourceGenerator.Sugar.Common;
 
 public class SemanticBuildingContext
 {
     public readonly StringBuilder Builder;
-    private readonly IReadOnlyDictionary<Guid, List<BuilderAttribute>> _attributes;
 
-    public SemanticBuildingContext(StringBuilder builder, IReadOnlyDictionary<Guid, List<BuilderAttribute>> attributes)
+    public SemanticBuildingContext(StringBuilder builder)
     {
         Builder = builder;
-        _attributes = attributes;
     }
-
-    public IReadOnlyList<BuilderAttribute>? GetAttributes(Guid contextId)
-    {
-        if (_attributes.ContainsKey(contextId) == false)
-            return null;
-
-        return _attributes[contextId];
-    }
-
-    public void AddAttributes<T>(T semanticBuilder, in int indentLevel)
+    
+    /*public void AddAttributes<T>(T semanticBuilder, in int indentLevel)
         where T : ISemanticStructBuilder
     {
         var attributes = GetAttributes(semanticBuilder.ContextId);
@@ -54,7 +42,7 @@ public class SemanticBuildingContext
         }
 
         info.Push();
-    }
+    }*/
 
     public static implicit operator StringBuilder(SemanticBuildingContext context)
     {

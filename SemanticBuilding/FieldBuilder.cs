@@ -1,10 +1,10 @@
+using SourceGenerator.Sugar.Base;
 using SourceGenerator.Sugar.Common;
 using SourceGenerator.Sugar.Extensions;
-using SourceGenerator.Sugar.Interfaces;
 
 namespace SourceGenerator.Sugar.SemanticBuilding;
 
-public struct FieldBuilder : ISemanticStructBuilder
+public class FieldBuilder : SemanticStructBuilderBase
 {
     public string Modifier;
     public string ValueType;
@@ -15,15 +15,13 @@ public struct FieldBuilder : ISemanticStructBuilder
 
     private FieldAccessor? _get;
     private FieldAccessor? _set;
-
-    public Guid ContextId { get; set; }
-
+    
     public FieldAccessor? Get
     {
         get => _get;
         set
         {
-            if (value != null && value.Value.Type == AccessorType.Set)
+            if (value != null && value.Type == AccessorType.Set)
                 throw new ArgumentException("Get accessor must be of type \"Get\"");
 
             _get = value;
@@ -35,14 +33,14 @@ public struct FieldBuilder : ISemanticStructBuilder
         get => _set;
         set
         {
-            if (value != null && value.Value.Type == AccessorType.Get)
+            if (value != null && value.Type == AccessorType.Get)
                 throw new ArgumentException("Set accessor must be of type \"Set\"");
 
             _set = value;
         }
     }
     
-    public void Build(SemanticBuildingContext builder, ref int indentLevel)
+    protected override void BuildStruct(SemanticBuildingContext builder, ref int indentLevel)
     {
         indentLevel++;
 
@@ -85,8 +83,8 @@ public struct FieldBuilder : ISemanticStructBuilder
             Get ??= FieldAccessor.Get();
             Set ??= FieldAccessor.Set();
 
-            Get.Value.Build(builder, ref indentLevel);
-            Set.Value.Build(builder, ref indentLevel);
+            Get.Build(builder, ref indentLevel);
+            Set.Build(builder, ref indentLevel);
 
             builder.Indent(indentLevel)
                 .Append('}')

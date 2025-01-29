@@ -1,22 +1,22 @@
+using SourceGenerator.Sugar.Base;
 using SourceGenerator.Sugar.Common;
 using SourceGenerator.Sugar.Extensions;
-using SourceGenerator.Sugar.Interfaces;
 
 namespace SourceGenerator.Sugar.SemanticBuilding;
 
-public struct MethodStructBuilder : ISemanticStructBuilder
+public class MethodStructBuilder : SemanticStructBuilderBase
 {
     public string Modifier;
     public string Type;
     public string Name;
     public string Args;
     public string Body;
-
-    public Guid ContextId { get; set; }
-
-    public void Build(SemanticBuildingContext builder, ref int indentLevel)
+    
+    protected override void BuildStruct(SemanticBuildingContext builder, ref int indentLevel)
     {
         indentLevel++;
+
+        BuildAttribute(builder, ref indentLevel);
 
         builder.Indent(indentLevel)
             .AppendSpaceEnd(Modifier)

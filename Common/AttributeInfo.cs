@@ -4,15 +4,24 @@ using System.Runtime.InteropServices;
 namespace SourceGenerator.Sugar.Common;
 
 [StructLayout(LayoutKind.Auto)]
-public struct BuilderAttribute
+public struct AttributeInfo
 {
     public string Namespace;
     public string AttributeName;
     public string? Args;
 
-    public static BuilderAttribute StructLayout(LayoutKind kind)
+    public static AttributeInfo Serializable()
     {
-        return new BuilderAttribute
+        return new AttributeInfo
+        {
+            Namespace = "System",
+            AttributeName = nameof(Serializable),
+        };
+    } 
+    
+    public static AttributeInfo StructLayout(LayoutKind kind)
+    {
+        return new AttributeInfo
         {
             Namespace = typeof(StructLayoutAttribute).Namespace!,
             AttributeName = nameof(StructLayout),
@@ -20,9 +29,9 @@ public struct BuilderAttribute
         };
     }
     
-    public static BuilderAttribute MethodImpl(MethodImplOptions options)
+    public static AttributeInfo MethodImpl(MethodImplOptions options)
     {
-        return new BuilderAttribute
+        return new AttributeInfo
         {
             Namespace = typeof(MethodImplAttribute).Namespace!,
             AttributeName = nameof(MethodImpl),

@@ -1,18 +1,18 @@
 using System.Runtime.CompilerServices;
+using Microsoft.CodeAnalysis;
+using SourceGenerator.Sugar.Base;
 using SourceGenerator.Sugar.Common;
 using SourceGenerator.Sugar.Extensions;
-using SourceGenerator.Sugar.Interfaces;
 
 namespace SourceGenerator.Sugar.SemanticBuilding;
 
-public struct FieldAccessor : ISemanticStructBuilder
+public class FieldAccessor : SemanticStructBuilderBase
 {
     public AccessorType Type;
+    public Accessibility? Accessibility;
     public string? Content;
 
-    public Guid ContextId { get; set; }
-
-    public void Build(SemanticBuildingContext builder, ref int indentLevel)
+    protected override void BuildStruct(SemanticBuildingContext builder, ref int indentLevel)
     {
         indentLevel++;
 
@@ -25,15 +25,20 @@ public struct FieldAccessor : ISemanticStructBuilder
 
         if (string.IsNullOrEmpty(Content) == true)
         {
-            builder.Indent(indentLevel)
-                .Append(accessorName)
+            var info = builder.Indent(indentLevel);
+
+            if (Accessibility != null)
+            {
+                info.Append(Accessibility.ToString().ToLower())
+                    .Append(' ');
+            }
+
+            info.Append(accessorName)
                 .Append(';')
                 .Push();
         }
         else
         {
-            builder.AddAttributes(this, indentLevel);
-            
             builder.Indent(indentLevel)
                 .Append(accessorName)
                 .Push();
@@ -58,13 +63,13 @@ public struct FieldAccessor : ISemanticStructBuilder
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static FieldAccessor Get(Func<FieldAccessor, FieldAccessor>? setup = null)
+    public static FieldAccessor Get(Action<FieldAccessor>? setup = null)
     {
         return Get(null, setup);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static FieldAccessor Get(Func<string>? contentBuilder, Func<FieldAccessor, FieldAccessor>? setup = null)
+    public static FieldAccessor Get(Func<string>? contentBuilder, Action<FieldAccessor>? setup = null)
     {
         var accessor = new FieldAccessor
         {
@@ -73,25 +78,18 @@ public struct FieldAccessor : ISemanticStructBuilder
             ContextId = Guid.NewGuid()
         };
 
-        if (setup != null)
-            accessor = setup.Invoke(accessor);
-
+        setup?.Invoke(accessor);
         return accessor;
     }
 
-    public override int GetHashCode()
-    {
-        return ContextId.GetHashCode();
-    }
-
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static FieldAccessor Set(Func<FieldAccessor, FieldAccessor>? setup = null)
+    public static FieldAccessor Set(Action<FieldAccessor>? setup = null)
     {
         return Set(null, setup);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static FieldAccessor Set(Func<string>? contentBuilder, Func<FieldAccessor, FieldAccessor>? setup = null)
+    public static FieldAccessor Set(Func<string>? contentBuilder, Action<FieldAccessor>? setup = null)
     {
         var accessor = new FieldAccessor
         {
@@ -100,9 +98,7 @@ public struct FieldAccessor : ISemanticStructBuilder
             ContextId = Guid.NewGuid()
         };
 
-        if (setup != null)
-            accessor = setup.Invoke(accessor);
-
+        setup?.Invoke(accessor);
         return accessor;
     }
 }

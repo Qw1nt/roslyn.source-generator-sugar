@@ -9,28 +9,27 @@ namespace SourceGenerator.Sugar.Base;
 
 public abstract class IncrementalSourceGeneratorBase : IIncrementalGenerator
 {
+    private readonly HashSet<string> _usings = new();
+    private readonly List<AttributeInfo> _attributesStore = new();
+
     protected readonly StringBuilder Builder = new();
 
-    private readonly List<LogicContainer> _classBuilders = new();
-    private readonly List<FieldBuilder> _fieldBuilders = new();
-    private readonly List<MethodStructBuilder> _methodBuilders = new();
-    private readonly HashSet<string> _usings = new();
+    private NamespaceBuilder _root;
+    private int _reservedSpaces;
 
-    private readonly Dictionary<Guid, List<BuilderAttribute>> _attributes = new();
-    private readonly List<BuilderAttribute> _attributesStore = new();
+    private ISemanticStructBuilder? _structBuilderContext;
 
-    private NamespaceBuilder _namespaceBuilder;
-    private LogicContainer _currentClassBuilder;
-
-    private Guid _currentContextId;
-
-    private Guid CurrentContextId
+    private ISemanticStructBuilder? StructBuilderContext
     {
-        get => _currentContextId;
+        get => _structBuilderContext;
         set
         {
-            _currentContextId = value;
+            _structBuilderContext = value;
+
             TryAddAttributesToContext();
+            StructBuilderContext?.AddSpace(_reservedSpaces);
+
+            _reservedSpaces = 0;
         }
     }
 
@@ -45,41 +44,30 @@ public abstract class IncrementalSourceGeneratorBase : IIncrementalGenerator
             Using(@using);
     }
 
-    protected void Attribute(BuilderAttribute source)
+    protected void Attribute(AttributeInfo source)
     {
         _attributesStore.Add(source);
     }
 
-    protected void Attribute<T>(T builder, BuilderAttribute source)
-        where T : ISemanticStructBuilder
+    protected void Public()
     {
-        var contextId = builder.ContextId;
-
-        if (_attributes.ContainsKey(contextId) == false)
-            _attributes.Add(contextId, new List<BuilderAttribute>());
-
-        _attributes[contextId].Add(source);
+        
     }
-
+    
     private void TryAddAttributesToContext()
     {
-        if (CurrentContextId == Guid.Empty || _attributesStore.Count == 0)
+        if (StructBuilderContext == null || _attributesStore.Count == 0)
             return;
 
-        if (_attributes.ContainsKey(CurrentContextId) == false)
-            _attributes.Add(CurrentContextId, new List<BuilderAttribute>(_attributesStore));
-        else
-            _attributes[CurrentContextId].AddRange(_attributesStore);
+        foreach (var builderAttribute in _attributesStore)
+            StructBuilderContext.AddAttribute(builderAttribute);
 
         _attributesStore.Clear();
     }
 
     protected void Space()
     {
-    }
-
-    protected void Space(Guid contextId)
-    {
+        _reservedSpaces++;
     }
 
     protected void Namespace(ITypeSymbol type, Action<NamespaceBuilder> context)
@@ -94,19 +82,17 @@ public abstract class IncrementalSourceGeneratorBase : IIncrementalGenerator
 
     protected void Namespace(string namespaceName, Action<NamespaceBuilder> context)
     {
-        _classBuilders.Clear();
-        _fieldBuilders.Clear();
-        _methodBuilders.Clear();
-
-        _namespaceBuilder = new NamespaceBuilder
+        _root = new NamespaceBuilder
         {
             Namespace = namespaceName,
-            Classes = _classBuilders,
             ContextId = Guid.NewGuid()
         };
 
-        CurrentContextId = _namespaceBuilder.ContextId;
-        context.Invoke(_namespaceBuilder);
+        StructBuilderContext = _root;
+        var currentContext = StructBuilderContext;
+        context.Invoke(_root);
+
+        StructBuilderContext = currentContext;
     }
 
     protected void Class(string modifier, string name, Action<LogicContainer> context)
@@ -126,16 +112,16 @@ public abstract class IncrementalSourceGeneratorBase : IIncrementalGenerator
             Modifier = modifier,
             Name = name,
             Type = type,
-            Fields = _fieldBuilders,
-            Methods = _methodBuilders,
             ContextId = Guid.NewGuid()
         };
 
-        _currentClassBuilder = classBuilder;
-        CurrentContextId = classBuilder.ContextId;
+        var currentContext = StructBuilderContext;
+        StructBuilderContext!.AddChild(classBuilder);
+        StructBuilderContext = classBuilder;
 
-        context.Invoke(_currentClassBuilder);
-        _classBuilders.Add(_currentClassBuilder);
+        context.Invoke(classBuilder);
+
+        StructBuilderContext = currentContext;
     }
 
     protected void Const(Accessibility accessibility, string type, string name, string value)
@@ -149,8 +135,7 @@ public abstract class IncrementalSourceGeneratorBase : IIncrementalGenerator
         );
     }
 
-    protected void Field(Accessibility accessibility, string type, string name,
-        Func<FieldBuilder, FieldBuilder>? builder = null)
+    protected void Field(Accessibility accessibility, string type, string name, Action<FieldBuilder>? builder = null)
     {
         CreateDataField(accessibility.ToString().ToLower(), type, name, builder!, FieldBuilderType.Field);
     }
@@ -160,18 +145,18 @@ public abstract class IncrementalSourceGeneratorBase : IIncrementalGenerator
         CreateDataField(modifier, type, name, null!, FieldBuilderType.Field);
     }
 
-    protected void Property(Accessibility accessibility, string type, string name,
-        Func<FieldBuilder, FieldBuilder> builder)
+    protected void Property(Accessibility accessibility, string type, string name, Action<FieldBuilder> builder)
     {
         CreateDataField(accessibility.ToString().ToLower(), type, name, builder, FieldBuilderType.Property);
     }
 
-    protected void Property(string accessibility, string type, string name, Func<FieldBuilder, FieldBuilder> builder)
+    protected void Property(string accessibility, string type, string name, Action<FieldBuilder> builder)
     {
         CreateDataField(accessibility, type, name, builder, FieldBuilderType.Property);
     }
 
-    private void CreateDataField(string modifier, string type, string name, Func<FieldBuilder, FieldBuilder> builder, FieldBuilderType builderType, string? value = null)
+    private void CreateDataField(string modifier, string type, string name, Action<FieldBuilder> builder,
+        FieldBuilderType builderType, string? value = null)
     {
         var field = new FieldBuilder
         {
@@ -183,25 +168,33 @@ public abstract class IncrementalSourceGeneratorBase : IIncrementalGenerator
             ContextId = Guid.NewGuid()
         };
 
-        CurrentContextId = field.ContextId;
+        var context = StructBuilderContext;
+
+        StructBuilderContext!.AddChild(field);
+        StructBuilderContext = field;
 
         if (builder != null!)
-            field = builder.Invoke(field);
+            builder.Invoke(field);
 
-        _fieldBuilders.Add(field);
+        StructBuilderContext = context;
     }
 
-    protected void Constructor(string modifier, ITypeSymbol type, Func<string> body)
+    protected void Constructor(string modifier, ITypeSymbol type, Action<MethodStructBuilder> builder)
     {
-        Method(modifier, string.Empty, type.Name, body);
+        Method(modifier, string.Empty, type.Name, builder);
     }
 
-    protected void Method(string modifier, string type, string name, Func<string> body)
+    protected void Constructor(string modifier, ITypeSymbol type, string args, Action<MethodStructBuilder> builder)
     {
-        Method(modifier, type, name, string.Empty, body);
+        Method(modifier, string.Empty, type.Name, args, builder);
     }
 
-    protected void Method(string modifier, string type, string name, string args, Func<string> body)
+    protected void Method(string modifier, string type, string name, Action<MethodStructBuilder> builder)
+    {
+        Method(modifier, type, name, string.Empty, builder);
+    }
+
+    protected void Method(string modifier, string type, string name, string args, Action<MethodStructBuilder> builder)
     {
         var methodBuilder = new MethodStructBuilder
         {
@@ -209,23 +202,43 @@ public abstract class IncrementalSourceGeneratorBase : IIncrementalGenerator
             Type = type,
             Name = name,
             Args = args,
-            Body = body.Invoke(),
             ContextId = Guid.NewGuid()
         };
 
-        CurrentContextId = methodBuilder.ContextId;
-        _methodBuilders.Add(methodBuilder);
+        var context = StructBuilderContext;
+        StructBuilderContext!.AddChild(methodBuilder);
+        StructBuilderContext = methodBuilder;
+
+        builder?.Invoke(methodBuilder);
+
+        StructBuilderContext = context;
     }
 
     private int BuildUsings()
     {
-        foreach (var keyValue in _attributes)
-        {
-            var usings = keyValue.Value.Select(x => x.Namespace);
+        var queue = new Queue<ISemanticStructBuilder>();
+        queue.Enqueue(_root);
 
-            foreach (var usingLine in usings)
-                _usings.Add(usingLine);
+        var attributes = new List<AttributeInfo>();
+
+        while (queue.Count > 0)
+        {
+            var item = queue.Dequeue();
+            attributes.AddRange(item.GetAttributes());
+
+            var children = item.GetChild();
+
+            if (children == null)
+                continue;
+
+            foreach (var child in children)
+                queue.Enqueue(child);
         }
+
+        var usings = attributes.Select(x => x.Namespace);
+
+        foreach (var usingLine in usings)
+            _usings.Add(usingLine);
 
         var count = _usings.Count;
 
@@ -245,8 +258,8 @@ public abstract class IncrementalSourceGeneratorBase : IIncrementalGenerator
     {
         var indent = 0;
 
-        _namespaceBuilder.UsingsCount = BuildUsings();
-        _namespaceBuilder.Build(new SemanticBuildingContext(Builder, _attributes), ref indent);
+        _root.UsingsCount = BuildUsings();
+        _root.Build(new SemanticBuildingContext(Builder), ref indent);
     }
 
     protected void AddSource(SourceProductionContext context, string fileName)
